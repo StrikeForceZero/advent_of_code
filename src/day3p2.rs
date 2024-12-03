@@ -49,7 +49,9 @@ fn parse_lines<T: Read>(lines: Lines<BufReader<T>>) -> Result<i32, Box<dyn Error
                     cap[2].parse::<i32>().expect("failed to parse int"),
                 ));
                 // back to back operator check optimization
-                if mat.start != last_index + 1 {
+                if mat.start == last_index + 1 {
+                    // back to back, no need to check for `do()` or `don't()`
+                } else {
                     // not back to back
                     // we need to search the &str slice between the last index and our current match for `do` `don't`
                     let do_dont_search_area = &input_line[last_index..mat.start];
@@ -75,8 +77,6 @@ fn parse_lines<T: Read>(lines: Lines<BufReader<T>>) -> Result<i32, Box<dyn Error
                     if next_enabled != enabled {
                         enabled = next_enabled;
                     }
-                } else {
-                    // back to back, no need to check for `do()` or `don't()`
                 }
                 // set the last index to the end of the found `mul`
                 last_index = mat.end;
