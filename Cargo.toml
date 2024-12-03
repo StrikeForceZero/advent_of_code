@@ -12,3 +12,11 @@ thiserror = "2"
 # [[example]]
 # name = "day0"
 # path = "src/day0p1.rs"
+
+[[example]]
+name = "day1p1"
+path = "src/day1p1.rs"
+
+[[example]]
+name = "day1p2"
+path = "src/day1p2.rs"
