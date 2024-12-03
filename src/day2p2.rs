@@ -103,7 +103,6 @@ fn main() -> Result<(), Box<dyn Error>> {
             if let IsNotSafeError::U32OperationError(err) = err {
                 panic!("U32 Operation Error: {err:?}");
             }
-            let old_report = report;
             for ix in 0..report.len() {
                 let mut report = report.clone();
                 report.remove(ix);

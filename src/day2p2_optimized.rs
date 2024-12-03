@@ -32,80 +32,83 @@ impl Report {
     fn fix(self) -> Self {
         self.fix_cloned().map(|(_, report)| report).unwrap_or(self)
     }
+
+    /// Attempts to smartly remove any single bad items to pass validation
+    /// returns Some((true, Self)) if it had to fix the data
+    /// returns Some((false, Self)) if it did not have to fix the data
+    /// returns None if it failed to fix the data
     fn fix_cloned(&self) -> Option<(bool, Self)> {
         if self.is_safe() {
             return Some((false, self.clone()));
         }
 
-        let mut invalid_distances = Vec::new();
-        let mut mixed_directions = Vec::new();
-        for error in self.indexed_errors.iter() {
-            match error {
-                IsNotSafeError::InvalidDistance { index, .. } => {
-                    invalid_distances.push(*index);
-                }
-                IsNotSafeError::MixedDirection { index, .. } => {
-                    mixed_directions.push(*index);
-                }
-                _ => {
-                    panic!("{error:?}");
-                }
-            }
-        }
+        let invalid_distances = self.collect_indices(IsNotSafeError::InvalidDistance);
         if is_single_or_adjacent(&invalid_distances) {
-            for &invalid_ix in invalid_distances.iter() {
-                let fixed = self.remove_bad_item_cloned(invalid_ix);
-                if fixed.is_safe() {
-                    return Some((true, fixed));
-                }
-                if invalid_ix > 0 {
-                    let fixed = self.remove_bad_item_cloned(invalid_ix - 1);
-                    if fixed.is_safe() {
-                        return Some((true, fixed));
-                    }
-                }
+            if let Some(fixed) = self.try_fix_invalid_indices(&invalid_distances) {
+                return Some(fixed);
             }
         }
+
+        let mixed_directions = self.collect_indices(IsNotSafeError::MixedDirection);
         if is_single_or_adjacent(&mixed_directions) {
-            for &invalid_ix in mixed_directions.iter() {
-                let fixed = self.remove_bad_item_cloned(invalid_ix);
-                if fixed.is_safe() {
-                    return Some((true, fixed));
-                }
-                if invalid_ix > 0 {
-                    let fixed = self.remove_bad_item_cloned(invalid_ix - 1);
+            if let Some(fixed) = self.try_fix_invalid_indices(&mixed_directions) {
+                return Some(fixed);
+            }
+        }
+
+        /// similar to [`is_single_or_adjacent`], we are checking if there are 1-2 non error indices.
+        // this attempts to remove one of the 2 "good" ones to see if it will then validate
+        if [self.data.len() - 1, self.data.len() - 2].contains(&mixed_directions.len()) {
+            for ix in 0..self.data.len() {
+                if !self.contains_error_at(ix) {
+                    let fixed = self.remove_bad_item_cloned(ix);
                     if fixed.is_safe() {
                         return Some((true, fixed));
                     }
                 }
             }
         }
-        if [self.data.len() - 1, self.data.len() - 2].contains(&mixed_directions.len()) {
-            'outer: for ix in 0..self.data.len() {
-                for &error in self.indexed_errors.iter() {
-                    match error {
-                        IsNotSafeError::InvalidDistance { index, .. } => {
-                            if index == ix {
-                                continue 'outer;
-                            }
-                        }
-                        IsNotSafeError::MixedDirection { index, .. } => {
-                            if index == ix {
-                                continue 'outer;
-                            }
-                        }
-                        _ => {
-                            panic!("{error:?}");
-                        }
-                    }
-                }
-                let fixed = self.remove_bad_item_cloned(ix);
+
+        None
+    }
+
+    fn collect_indices<F>(&self, matches: F) -> Vec<usize> where
+        F: Fn(&IsNotSafeError) -> bool,
+    {
+        self.indexed_errors.iter().filter_map(|error| {
+            if matches(error) {
+                Some(error.index())
+            } else {
+                None
+            }
+        }).collect()
+    }
+
+    fn try_fix_invalid_indices(&self, indices: &[usize]) -> Option<(bool, Self)> {
+        for &invalid_ix in indices.iter() {
+            if let Some(fixed) = self.attempt_fix(invalid_ix) {
+                return Some(fixed);
+            }
+        }
+        None
+    }
+
+    fn attempt_fix(&self, index: usize) -> Option<(bool, Self)> {
+        for &ix_offset in &[0, 1] {
+            if index >= ix_offset {
+                let fixed = self.remove_bad_item_cloned(index - ix_offset);
                 if fixed.is_safe() {
                     return Some((true, fixed));
                 }
             }
         }
         None
+    }
+
+    fn contains_error_at(&self, ix: usize) -> bool {
+        self.indexed_errors.iter().any(|error| {
+            matches!(error, IsNotSafeError::InvalidDistance { index, .. } | IsNotSafeError::MixedDirection { index, .. } if *index == ix)
+        })
     }
 }
 
@@ -144,6 +147,13 @@ enum IsNotSafeError {
 }
 
 impl IsNotSafeError {
+    fn index(&self) -> usize {
+        match self {
+            IsNotSafeError::U32OperationError { index, .. } => *index,
+            IsNotSafeError::InvalidDistance { index, .. } => *index,
+            IsNotSafeError::MixedDirection { index, .. } => *index,
+        }
+    }
     fn from_u32_op_error(index: usize, error: impl Into<U32OperationError>) -> Self {
         Self::U32OperationError { index, error: error.into() }
     }
