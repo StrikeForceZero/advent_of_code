@@ -8,6 +8,7 @@ edition = "2021"
 
 [dependencies]
 thiserror = "2"
+regex = "1"
 
 # [[example]]
 # name = "day0"
@@ -32,3 +33,11 @@ path = "src/day2p2.rs"
 [[example]]
 name = "day2p2 optimized"
 path = "src/day2p2_optimized.rs"
+
+[[example]]
+name = "day3p1"
+path = "src/day3p1.rs"
+
+[[example]]
+name = "day3p2"
+path = "src/day3p2.rs"
