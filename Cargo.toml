@@ -1,0 +1,14 @@
+[package]
+name = "advent_of_code"
+authors = ["Brett Striker <strikeforcezero@gmail.com>"]
+version = "0.0.0"
+edition = "2021"
+
+[lib]
+
+[dependencies]
+thiserror = "2"
+
+# [[example]]
+# name = "day0"
+# path = "src/day0p1.rs"
