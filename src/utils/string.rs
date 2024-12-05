@@ -40,9 +40,12 @@ pub fn deformat_string(input: &str) -> String {
     input
         .lines()
         .map(|line| line.trim().to_string())
-        .filter(|line| !line.is_empty())
+        // maintain line breaks inside
+        // .filter(|line| !line.is_empty())
         .map(|line| line + "\n")
-        .collect()
+        .collect::<String>()
+        .trim()
+        .to_string()
 }
 
 #[cfg(test)]
