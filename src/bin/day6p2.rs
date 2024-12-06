@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use thiserror::Error;
 use advent_of_code::read_input;
 
@@ -62,7 +62,7 @@ impl From<(usize, usize)> for Pos {
 type Board = Vec<Vec<char>>;
 
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Hash)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 enum Direction {
     #[default]
     Up,
@@ -108,22 +108,20 @@ enum MoveError {
     Looped
 }
 
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default)]
 struct GuardWalker {
     start_pos: Pos,
-    seen: HashMap<Pos, usize>,
+    seen: HashMap<Pos, HashSet<Direction>>,
     current_pos: Pos,
     direction: Direction,
-    current_loop: Vec<Pos>,
 }
 
 impl GuardWalker {
     fn new(pos: Pos) -> Self {
         Self {
-            seen: HashMap::from([(pos, 1)]),
+            seen: HashMap::from([(pos, HashSet::from([Direction::Up]))]),
             current_pos: pos,
             start_pos: pos,
-            current_loop: vec![pos],
             ..Default::default()
         }
     }
@@ -131,33 +129,6 @@ impl GuardWalker {
         let width = board[0].len();
         let height = board.len();
         self.direction.next(self.current_pos, Pos::default(), Pos::new(width - 1, height - 1))
-    }
-    fn is_looping(&self, board: &Board) -> bool {
-        let Some(&cur_pos_seen_count) = self.seen.get(&self.current_pos) else { unreachable!() };
-        if cur_pos_seen_count > 1 {
-            let mut cur_pos_loop_indexes = self.current_loop
-                .iter()
-                .enumerate()
-                .filter_map(|(ix, &pos)| {
-                    if pos == self.current_pos {
-                        Some(ix)
-                    } else {
-                        None
-                    }
-                })
-                .collect::<Vec<_>>();
-            if cur_pos_loop_indexes.len() > 1 {
-                let Some(last_ix) = cur_pos_loop_indexes.pop() else { unreachable!() };
-                let Some(next_last_ix) = cur_pos_loop_indexes.pop() else { unreachable!() };
-                let loop_set = self.current_loop[next_last_ix..last_ix].iter().collect::<Vec<_>>();
-                if let Some(future_pos) = self.next_pos(&board) {
-                    if loop_set.get(1).copied() == Some(&future_pos) {
-                        return true;
-                    }
-                }
-            }
-        }
-        false
     }
     fn move_forward(&mut self, board: &Board) -> Result<Option<Pos>, MoveError> {
         let Some(next_pos) = self.next_pos(&board) else {
@@ -167,18 +138,12 @@ impl GuardWalker {
             return Ok(None);
         } else if board[next_pos.y][next_pos.x] == '#' {
             self.direction.turn();
-            // since we can cross over paths, we only check if we are looping after hitting an obstacle
-            if self.is_looping(&board) {
-                return Err(MoveError::Looped);
-            }
         } else {
             self.current_pos = next_pos;
-            self.current_loop.push(self.current_pos);
             let entry = self.seen.entry(self.current_pos).or_default();
-            if *entry == 0 {
-                self.current_loop.clear();
+            if entry.insert(self.direction) == false {
+                return Err(MoveError::Looped);
             }
-            *entry += 1;
         }
         Ok(Some(self.current_pos))
     }
