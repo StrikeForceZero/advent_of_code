@@ -13,7 +13,7 @@ fn main() {
             if update.len() == 0 || update.len() % 2 == 0 {
                 panic!("expected odd length update, got: {update:?}");
             }
-            let mid_ix = (update.len() - 1).div_ceil(2);
+            let mid_ix = update.len() / 2;
             let Some(mid_page) = update.get(mid_ix) else {
                 unreachable!()
             };
@@ -263,7 +263,7 @@ mod tests {
                 if update.len() == 0 || update.len() % 2 == 0 {
                     panic!("expected odd length update, got: {update:?}");
                 }
-                let mid_ix = (update.len() - 1).div_ceil(2);
+                let mid_ix = update.len() / 2;
                 let Some(mid_page) = update.get(mid_ix) else {
                     unreachable!()
                 };
