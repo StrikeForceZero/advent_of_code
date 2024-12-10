@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::fmt::Write;
+use std::fmt::{Display, Formatter, Write};
 use itertools::{Itertools};
 use thiserror::Error;
 use advent_of_code::read_input;
@@ -17,10 +17,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 struct FileBlock {
     id: usize,
     span: usize,
+}
+
+impl Display for FileBlock {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let FileBlock { id, span } = *self;
+        for _ in 0..span {
+            write!(f, "{id}")?;
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -78,7 +88,6 @@ impl std::fmt::Display for DeflatedDiskMap {
     }
 }
 
-
 #[derive(Debug, Clone, Default, PartialEq)]
 struct DiskMap {
     blocks: Vec<Option<usize>>,
@@ -92,41 +101,47 @@ impl DiskMap {
         }
         result
     }
-    fn min_file_size(&self) -> usize {
+    fn file_blocks(&self) -> Vec<(usize, FileBlock)> {
         // TODO: we could optimize this by skipping based on last_file_pos and reversing the iterator
+        let mut pos_and_file_blocks = vec![];
         let mut file_blocks = self.blocks.iter().enumerate().filter(|(_, b)| b.is_some()).peekable();
-        let mut min_file_block_size = usize::MAX;
-        while let Some((ix, Some(id))) = file_blocks.next() {
-            let last_ix = ix;
+        while let Some((ix, &Some(id))) = file_blocks.next() {
+            let mut last_ix = ix;
             let mut file_block_size = 1;
-            while let Some((ix, Some(next_id))) = file_blocks.peek() {
+            while let Some(&(ix, &Some(next_id))) = file_blocks.peek() {
+                // non-adjacent or different ids
                 if ix - last_ix > 1 || id != next_id {
                     break;
                 }
-                file_blocks.next();
+                last_ix = ix;
                 file_block_size += 1;
+                file_blocks.next();
             }
-            min_file_block_size = min_file_block_size.min(file_block_size);
+            pos_and_file_blocks.push((
+                ix,
+                FileBlock {
+                    id,
+                    span: file_block_size,
+                },
+            ));
         }
-        min_file_block_size
+        pos_and_file_blocks
     }
-    fn max_free_space_size(&self) -> usize {
+    fn max_free_space_size_before_pos(&self, before_pos: usize) -> usize {
         // TODO: we could optimize this by skipping based on first_free_space_pos
-        let mut free_space_blocks = self.blocks.iter().enumerate().filter(|(_, b)| b.is_none()).peekable();
+        let mut free_space_blocks = self.blocks.iter().enumerate().take(before_pos).filter(|(_, b)| b.is_none()).peekable();
         let mut max_free_space_size = 0;
         'outer: while let Some((ix, None)) = free_space_blocks.next() {
-            let last_ix = ix;
+            let mut last_ix = ix;
             let mut free_space_size = 1;
-            while let Some((ix, None)) = free_space_blocks.peek() {
+            while let Some(&(ix, None)) = free_space_blocks.peek() {
+                // non-adjacent
                 if ix - last_ix > 1 {
                     break;
                 }
-                free_space_blocks.next();
+                last_ix = ix;
                 free_space_size += 1;
-                // don't count the last free space chunk since files cant be moved into it
-                if *ix == self.blocks.len() - 1 {
-                    break 'outer;
-                }
+                free_space_blocks.next();
             }
             max_free_space_size = max_free_space_size.max(free_space_size);
         }
@@ -155,12 +170,16 @@ impl DiskMap {
             return true
         }
 
-        let max_free_space_size = self.max_free_space_size();
-        let min_file_block_size = self.min_file_size();
-
-        println!("[is_compact]: max_free_space_size: {max_free_space_size} < min_file_block_size: {min_file_block_size} = {}", max_free_space_size < min_file_block_size);
-        // if false, we still have more compacting we can do
-        max_free_space_size < min_file_block_size
+        let file_blocks = self.file_blocks();
+        for (ix, file_block) in file_blocks {
+            let max_free_space_size_before_ix = self.max_free_space_size_before_pos(ix);
+            if file_block.span <= max_free_space_size_before_ix {
+                println!("[is_compact]: {file_block} @ {ix}: file_size({}) <= max_free_space({max_free_space_size_before_ix})", file_block.span);
+                return false
+            }
+        }
+        println!("[is_compact]: all file blocks are compact");
+        true
     }
     fn _compact(&mut self, mut steps: Option<usize>) -> bool {
         println!("---\nstarting compact ({steps:?})\n---");
@@ -605,6 +624,22 @@ mod tests {
     }
 
     #[test]
+    fn max_free_space_before_pos_test() -> anyhow::Result<()> {
+        assert_eq!(DiskMap::try_from("1")?.max_free_space_size_before_pos(0), 0);
+        assert_eq!(DiskMap::try_from(".")?.max_free_space_size_before_pos(0), 0);
+        assert_eq!(DiskMap::try_from(".")?.max_free_space_size_before_pos(1), 1);
+        assert_eq!(DiskMap::try_from("1.")?.max_free_space_size_before_pos(0), 0);
+        assert_eq!(DiskMap::try_from("1.")?.max_free_space_size_before_pos(1), 0);
+        assert_eq!(DiskMap::try_from("1.")?.max_free_space_size_before_pos(2), 1);
+        assert_eq!(DiskMap::try_from(".1")?.max_free_space_size_before_pos(1), 1);
+        assert_eq!(DiskMap::try_from("0.1")?.max_free_space_size_before_pos(1), 0);
+        assert_eq!(DiskMap::try_from("0.1")?.max_free_space_size_before_pos(2), 1);
+        assert_eq!(DiskMap::try_from("0..1")?.max_free_space_size_before_pos(3), 2);
+        assert_eq!(DiskMap::try_from("01..")?.max_free_space_size_before_pos(4), 2);
+        Ok(())
+    }
+
+    #[test]
     fn last_file_block_pos() -> anyhow::Result<()> {
         assert_eq!(DiskMap::try_from("1")?.last_file_block_pos(), Some(0));
         assert_eq!(DiskMap::try_from(".")?.last_file_block_pos(), None);
@@ -612,6 +647,20 @@ mod tests {
         assert_eq!(DiskMap::try_from(".1")?.last_file_block_pos(), Some(1));
         assert_eq!(DiskMap::try_from("0.1")?.last_file_block_pos(), Some(2));
         assert_eq!(DiskMap::try_from("0..1")?.last_file_block_pos(), Some(3));
+        Ok(())
+    }
+
+    #[test]
+    fn file_blocks_test() -> anyhow::Result<()> {
+        assert_eq!(DiskMap::try_from("111")?.file_blocks(), vec![
+            (0, FileBlock { id: 1, span: 3 }),
+        ]);
+        assert_eq!(DiskMap::try_from("777.44.3338888")?.file_blocks(), vec![
+            (0, FileBlock { id: 7, span: 3 }),
+            (4, FileBlock { id: 4, span: 2 }),
+            (7, FileBlock { id: 3, span: 3 }),
+            (10, FileBlock { id: 8, span: 4 }),
+        ]);
         Ok(())
     }
 
