@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 use std::fmt::{Display, Formatter};
-use num::Integer;
+use num::{Integer, ToPrimitive};
 use advent_of_code::read_input;
 
 fn main() -> anyhow::Result<()> {
@@ -14,20 +14,21 @@ fn main() -> anyhow::Result<()> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 enum EvenOddSplitResult {
     Zero,
-    Odd(u32),
-    Even((u32, u32)),
+    Odd(u64),
+    Even((u64, u64)),
 }
 
 // TODO: this should probably be on a trait and impl for each infallible number types via macro
-fn count_num_digits(num: u32) -> u32 {
+fn count_num_digits(num: u64) -> u64 {
     if num == 0 {
         1
     } else {
-        f64::from(num).log10().floor() as u32 + 1
+        let float = num.to_f64().filter(|float| float.is_finite()).unwrap_or_else(|| panic!("{num} could not be represented by a f64"));
+        float.log10().floor() as u64 + 1
     }
 }
 
-fn split_even_length_number(num: u32) -> EvenOddSplitResult {
+fn split_even_length_number(num: u64) -> EvenOddSplitResult {
     if num == 0 {
         return EvenOddSplitResult::Zero;
     }
@@ -41,26 +42,27 @@ fn split_even_length_number(num: u32) -> EvenOddSplitResult {
     }
 
     // Calculate the midpoint
-    let mid: u32 = num_digits / 2;
+    let mid: u64 = num_digits / 2;
 
     // Calculate the divisor to split the number
-    let divisor = 10_u64.pow(mid);
+    // TODO: potentially infallible since u64::MAX passes
+    let divisor = 10_u64.pow(u32::try_from(mid).unwrap_or_else(|err| panic!("count_num_digits({num}) / 2 = {mid} could not be represented by a u64: {err}")));
     let num = num as u64;
 
     // Split the number into two parts
     let left_part = num / divisor;
-    // input number always < u64 so each part is guaranteed to be u32
-    let left_part = u32::try_from(left_part).unwrap_or_else(|_| unreachable!());
+    // TODO: potentially infallible since u64::MAX passes
+    let left_part = u64::try_from(left_part).unwrap_or_else(|err| panic!("{num} / {divisor} = {left_part} could not be represented by a u64: {err}"));
 
     let right_part = num % divisor;
-    // input number always < u64 so each part is guaranteed to be u32
-    let right_part = u32::try_from(right_part).unwrap_or_else(|_| unreachable!());
+    // TODO: potentially infallible since u64::MAX passes
+    let right_part = u64::try_from(right_part).unwrap_or_else(|err| panic!("{num} % {divisor} = {right_part} could not be represented by a u64: {err}"));
 
     EvenOddSplitResult::Even((left_part, right_part))
 }
 
 #[derive(Debug, Copy, Clone, Default, PartialEq)]
-struct Stone(u32);
+struct Stone(u64);
 
 impl Stone {
     fn process(self) -> Vec<Self> {
@@ -130,7 +132,7 @@ impl TryFrom<&str> for StoneGenerator {
         let size_hint = raw_stones.size_hint();
         let mut stones = Vec::with_capacity(size_hint.1.unwrap_or(size_hint.0));
         for stone in raw_stones.into_iter() {
-            let stone = stone.parse::<u32>()?;
+            let stone = stone.parse::<u64>()?;
             let stone = Stone(stone);
             stones.push(stone);
 
@@ -190,7 +192,8 @@ mod tests {
         assert_eq!(count_num_digits(10), 2);
         assert_eq!(count_num_digits(100), 3);
         assert_eq!(count_num_digits(1000), 4);
-        assert_eq!(count_num_digits(u32::MAX), 10);
+        assert_eq!(count_num_digits(u32::MAX as u64), 10);
+        assert_eq!(count_num_digits(u64::MAX), 20);
         Ok(())
     }
 
@@ -201,7 +204,8 @@ mod tests {
         assert_eq!(split_even_length_number(10), EvenOddSplitResult::Even((1, 0)));
         assert_eq!(split_even_length_number(100), EvenOddSplitResult::Odd(100));
         assert_eq!(split_even_length_number(1000), EvenOddSplitResult::Even((10, 0)));
-        assert_eq!(split_even_length_number(u32::MAX), EvenOddSplitResult::Even((42949, 67295)));
+        assert_eq!(split_even_length_number(u32::MAX as u64), EvenOddSplitResult::Even((42949, 67295)));
+        assert_eq!(split_even_length_number(u64::MAX), EvenOddSplitResult::Even((1844674407, 3709551615)));
         Ok(())
     }
 }
