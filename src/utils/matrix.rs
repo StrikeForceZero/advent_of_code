@@ -1,3 +1,5 @@
+use glam::UVec2;
+
 pub fn get_matrix_width<T>(matrix: &Vec<Vec<T>>) -> Option<usize> {
     let mut size = None;
     for line in matrix.iter() {
@@ -179,6 +181,110 @@ where T: Clone + Default + PartialEq,
         }
     }
     diff
+}
+
+#[derive(Debug, Copy, Clone, Default, PartialEq, Eq, Hash)]
+pub struct MatrixDetails {
+    min: UVec2,
+    max: UVec2,
+}
+
+impl MatrixDetails {
+    pub fn from_matrix<T>(matrix: &Vec<Vec<T>>) -> Self {
+        let mut min = UVec2::MAX;
+        let mut max = UVec2::MIN;
+        for (pos, _) in MatrixIterator::new(matrix) {
+            min = min.min(pos);
+            max = max.max(pos);
+        }
+        Self {
+            min,
+            max,
+        }
+    }
+    pub fn min(&self) -> UVec2 {
+        self.min
+    }
+    pub fn max(&self) -> UVec2 {
+        self.max
+    }
+    pub fn width(&self) -> usize {
+        self.max.x as usize - self.min.x as usize
+    }
+    pub fn height(&self) -> usize {
+        self.max.y as usize - self.min.y as usize
+    }
+    pub fn max_index(&self) -> usize {
+        self.width() * self.height()
+    }
+    pub fn is_within_bounds(&self, pos: UVec2) -> bool {
+        if pos.x < self.min.x || pos.y < self.min.y {
+            return false;
+        }
+        if pos.x > self.max.x || pos.y > self.max.y {
+            return false;
+        }
+        true
+    }
+    pub fn pos_from_index(&self, index: usize) -> Option<UVec2> {
+        let x = index % self.width();
+        let y = index / self.width();
+        let pos = UVec2::new(x as u32, y as u32);
+        if !self.is_within_bounds(pos) {
+            return None;
+        }
+        Some(pos)
+    }
+    pub fn index_from_pos(&self, pos: UVec2) -> Option<usize> {
+        if !self.is_within_bounds(pos) {
+            return None;
+        }
+        let x = pos.x as usize - self.min.x as usize;
+        let y = pos.y as usize - self.min.y as usize;
+        Some(y * self.width() + x)
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct MatrixIterator<'a, T> {
+    // TODO: this should be &'a [&'a [T]] but it would be a pita to update the helper functions right now
+    matrix: &'a Vec<Vec<T>>,
+    index: usize,
+}
+
+impl<'a, T> MatrixIterator<'a, T> {
+    pub fn new(matrix: &'a Vec<Vec<T>>) -> Self {
+        Self {
+            matrix,
+            index: 0,
+        }
+    }
+}
+
+impl<'a, T> Iterator for MatrixIterator<'a, T> {
+    type Item = (UVec2, &'a T);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        // Calculate row and column based on the index
+        let rows = self.matrix.len();
+        if rows == 0 {
+            return None;
+        }
+
+        let Some(cols) = get_matrix_width(self.matrix) else {
+            return None;
+        };
+
+        if self.index >= rows * cols {
+            return None;
+        }
+
+        let row = self.index / cols;
+        let col = self.index % cols;
+        self.index += 1;
+
+        Some((UVec2::new(col as u32, row as u32), &self.matrix[row][col]))
+    }
 }
 
 #[cfg(test)]
