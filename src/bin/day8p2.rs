@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::ops::{Add, Neg, Sub};
 use itertools::Itertools;
-use advent_of_code::read_input;
+use advent_of_code::read_input_lines;
 use advent_of_code::utils::string::deformat_string;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
@@ -100,7 +100,7 @@ fn mark_seen(data: &Data, pos: Pos<i32>, seen: &mut SeenMap) {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let lines = read_input(8).map(|line| line.expect("failed to read input"));
+    let lines = read_input_lines(8).map(|line| line.expect("failed to read input"));
     // et lines = deformat_string("\
     //    ............
     //    ........0...

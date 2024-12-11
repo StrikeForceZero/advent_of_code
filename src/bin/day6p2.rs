@@ -1,9 +1,9 @@
 use std::collections::{HashMap, HashSet};
 use thiserror::Error;
-use advent_of_code::read_input;
+use advent_of_code::read_input_lines;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let board = read_input(6).map(|line| line.expect("failed to read input"));
+    let board = read_input_lines(6).map(|line| line.expect("failed to read input"));
     let board = board.map(|line| line.chars().collect::<Vec<_>>()).collect::<Vec<_>>();
     let Some(mut walker) = GuardWalker::init(&board) else {
         panic!("failed to find start pos");

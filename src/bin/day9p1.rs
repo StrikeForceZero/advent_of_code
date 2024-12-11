@@ -1,9 +1,9 @@
 use itertools::{Itertools};
 use thiserror::Error;
-use advent_of_code::read_input;
+use advent_of_code::read_input_lines;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut input = read_input(9);
+    let mut input = read_input_lines(9);
     let line = input.next().expect("input empty")?;
     let disk_map = DeflatedDiskMap::try_from(line)?.inflate();
     assert!(input.next().is_none(), "input expected to be single line");

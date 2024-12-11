@@ -97,7 +97,7 @@ fn parse_lines<T: Read>(lines: Lines<BufReader<T>>) -> Result<i32, Box<dyn Error
 
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let lines = advent_of_code::read_input(3);
+    let lines = advent_of_code::read_input_lines(3);
     let answer = parse_lines(lines)?;
     println!("Answer: {answer}");
     Ok(())

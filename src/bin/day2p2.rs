@@ -87,7 +87,7 @@ fn validate_report(report: &Vec<u32>) -> Result<(), IsNotSafeError> {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let lines = advent_of_code::read_input(2);
+    let lines = advent_of_code::read_input_lines(2);
     let mut reports = Vec::new();
     for input_line in lines {
         let input_line = input_line?;

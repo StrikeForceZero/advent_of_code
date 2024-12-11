@@ -1,10 +1,10 @@
 use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 use thiserror::Error;
-use advent_of_code::read_input;
+use advent_of_code::read_input_lines;
 
 fn main() {
-    let lines = read_input(5).map(|line| line.expect("failed to read input"));
+    let lines = read_input_lines(5).map(|line| line.expect("failed to read input"));
     let (rules, updates) = parse_input(lines);
 
     let mut sum = 0;

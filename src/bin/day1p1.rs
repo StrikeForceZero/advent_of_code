@@ -26,7 +26,7 @@ fn calc_distance(a: &[u32], b: &[u32]) -> u32 {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let lines = advent_of_code::read_input(1);
+    let lines = advent_of_code::read_input_lines(1);
     let mut a = Vec::new();
     let mut b = Vec::new();
     for input_line in lines {

@@ -2,7 +2,7 @@ use regex::Regex;
 use std::error::Error;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let lines = advent_of_code::read_input(3);
+    let lines = advent_of_code::read_input_lines(3);
     let mul_regex = Regex::new(r"mul\((\d+),(\d+)\)").expect("invalid regex");
     let mut result = 0;
     for input_line in lines {

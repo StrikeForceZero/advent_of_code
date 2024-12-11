@@ -9,9 +9,7 @@ use advent_of_code::utils::string::{deformat_string, StringToCharsMatrix};
 use advent_of_code::utils::vec2::{IntoIVec2, IntoUsizeTuple, TryIntoUVec2};
 
 fn main() -> anyhow::Result<()> {
-    let mut lines = advent_of_code::read_input(10);
-    let grid: Vec<Vec<_>> = lines.into_iter().map(|line| line.unwrap() + "\n")
-        .collect::<String>()
+    let grid: Vec<Vec<_>> = advent_of_code::read_input(10)?
         .to_chars_matrix()
         .into_iter()
         .enumerate()
@@ -407,29 +405,6 @@ mod tests {
 
         let mut iterator = MultiDirectionalPathMatrixIterator::new(&grid);
         let paths = iterator.process().into_iter().map(|iterator| iterator.path);
-
-        /*let mut map: HashMap<TrailPart, HashSet<Vec<TrailPart>>> = HashMap::new();
-        for path in paths.into_iter().collect::<HashSet<_>>().into_iter() {
-            // println!("{}", path.into_iter().map(|item| format!("{} ({})", item.pos, item.height)).collect::<Vec<_>>().join(" -> "));
-            let Some(&&first) = path.first() else { unreachable!() };
-            let entry = map.entry(first).or_default();
-            entry.insert(path.into_iter().cloned().collect());
-        }
-        let mut sum = 0;
-        for (start, paths) in map {
-            // println!("{}", start.pos);
-            sum += paths.iter().map(|path| path.iter().last().unwrap().pos).collect::<HashSet<UVec2>>().len();
-            for path in paths {
-                // println!("- {}", path.iter().map(|item| format!("{} ({})", item.pos, item.height)).collect::<Vec<_>>().join(" -> "));
-                let mut grid = DebugGrid::new(&grid);
-                for trail_part in path {
-                    let (x, y) = trail_part.pos.into_usize_tuple();
-                    grid.0[y][x] = Some(DebugCell::Height(trail_part.height));
-                }
-                // grid.print()?
-            }
-        }
-        */
 
         let sum = paths.map(|path| {
             (

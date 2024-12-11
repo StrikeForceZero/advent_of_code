@@ -12,7 +12,7 @@ lazy_static! {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let lines = advent_of_code::read_input(4);
+    let lines = advent_of_code::read_input_lines(4);
     let mut data = vec![];
     for input_line in lines {
         let input_line = input_line?;

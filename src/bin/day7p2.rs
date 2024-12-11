@@ -4,10 +4,10 @@ use std::fmt::Debug;
 use std::num::ParseIntError;
 use std::str::FromStr;
 use thiserror::Error;
-use advent_of_code::read_input;
+use advent_of_code::read_input_lines;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let lines = read_input(7).map(|line| line.expect("failed to read input"));
+    let lines = read_input_lines(7).map(|line| line.expect("failed to read input"));
     let mut total = 0;
     for line in lines {
         let parse_line_result = parse_line(&line)?;
