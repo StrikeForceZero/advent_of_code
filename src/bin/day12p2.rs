@@ -1,12 +1,13 @@
+use advent_of_code::read_input;
 use advent_of_code::utils::matrix::{MatrixDetails, MatrixIterator};
+use advent_of_code::utils::string::StringToCharsMatrix;
 use advent_of_code::utils::vec2::IntoIVec2;
 use glam::{IVec2, UVec2};
-use std::collections::{HashMap, HashSet, VecDeque};
-use std::num::TryFromIntError;
 use itertools::Itertools;
+use std::collections::{HashMap, HashSet, VecDeque};
+use std::hash::{Hash, Hasher};
+use std::num::TryFromIntError;
 use thiserror::Error;
-use advent_of_code::read_input;
-use advent_of_code::utils::string::StringToCharsMatrix;
 
 fn main() -> anyhow::Result<()> {
     let garden = read_input(12)?.to_chars_matrix();
@@ -25,23 +26,41 @@ struct PerimeterArea {
 
 impl PerimeterArea {
     fn cost(self) -> usize {
-        self.perimeter * self.area
+        self.sides * self.area
+    }
+}
+
+#[derive(Debug, Copy, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
+enum Axis {
+    #[default]
+    X,
+    Y,
+}
+
+impl From<Direction> for Axis {
+    fn from(value: Direction) -> Self {
+        match value {
+            Direction::Up => Self::Y,
+            Direction::Right => Self::X,
+            Direction::Down => Self::Y,
+            Direction::Left => Self::X,
+        }
     }
 }
 
 const DIRECTIONS: [Direction; 4] = [
-    Direction::North,
-    Direction::East,
-    Direction::South,
-    Direction::West,
+    Direction::Up,
+    Direction::Right,
+    Direction::Down,
+    Direction::Left,
 ];
 #[derive(Debug, Copy, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 enum Direction {
     #[default]
-    North,
-    East,
-    South,
-    West,
+    Up,
+    Right,
+    Down,
+    Left,
 }
 impl Direction {
     fn all() -> impl Iterator<Item = Self> {
@@ -49,22 +68,22 @@ impl Direction {
     }
     fn rotate(self) -> Self {
         match self {
-            Self::North => Self::East,
-            Self::East => Self::South,
-            Self::South => Self::West,
-            Self::West => Self::North,
+            Self::Up => Self::Right,
+            Self::Right => Self::Down,
+            Self::Down => Self::Left,
+            Self::Left => Self::Up,
         }
     }
     fn inverse(self) -> Self {
         match self {
-            Self::North => Self::South,
-            Self::East => Self::West,
-            Self::South => Self::North,
-            Self::West => Self::East,
+            Self::Up => Self::Down,
+            Self::Right => Self::Left,
+            Self::Down => Self::Up,
+            Self::Left => Self::Right,
         }
     }
     fn next_uvec2(self, pos: UVec2) -> Result<UVec2, TryFromIntError> {
-        let next_pos = self.next_ivec2(pos.into());
+        let next_pos = self.next_ivec2(pos.as_ivec2());
         UVec2::try_from(next_pos)
     }
     fn next_ivec2(self, pos: IVec2) -> IVec2 {
@@ -75,10 +94,10 @@ impl Direction {
 impl From<Direction> for IVec2 {
     fn from(direction: Direction) -> Self {
         match direction {
-            Direction::North => Self::NEG_Y,
-            Direction::South => Self::Y,
-            Direction::West => Self::NEG_X,
-            Direction::East => Self::X,
+            Direction::Up => Self::NEG_Y,
+            Direction::Down => Self::Y,
+            Direction::Left => Self::NEG_X,
+            Direction::Right => Self::X,
         }
     }
 }
@@ -91,10 +110,10 @@ impl TryFrom<IVec2> for Direction {
     type Error = UnknownDirection;
     fn try_from(delta: IVec2) -> Result<Self, Self::Error> {
         Ok(match delta {
-            IVec2::NEG_Y => Self::North,
-            IVec2::Y => Self::South,
-            IVec2::NEG_X => Self::West,
-            IVec2::X => Self::East,
+            IVec2::NEG_Y => Self::Up,
+            IVec2::Y => Self::Down,
+            IVec2::NEG_X => Self::Left,
+            IVec2::X => Self::Right,
             _ => return Err(UnknownDirection),
         })
     }
@@ -106,8 +125,114 @@ struct GardenBed {
     perimeter_area: PerimeterArea,
 }
 
-fn boundry_points(points: HashMap<UVec2, HashSet<Direction>>) -> Vec<UVec2> {
-    points.into_iter().flat_map(|(pos, connections)| !DIRECTIONS.iter().all(|direction| connections.contains(direction))).collect()
+fn boundry_points(points: HashMap<UVec2, HashSet<Direction>>) -> HashMap<UVec2, HashSet<Direction>> {
+    points
+        .into_iter()
+        .filter_map(|(pos, connections)| {
+            if DIRECTIONS
+                .iter()
+                .all(|direction| connections.contains(direction))
+            {
+                None
+            } else {
+                Some((pos, connections))
+            }
+        })
+        .collect()
+}
+
+#[derive(Debug, Copy, Clone, Default, Eq)]
+struct Edge {
+    start: IVec2,
+    end: IVec2,
+    axis: Axis,
+}
+
+impl PartialEq for Edge {
+    fn eq(&self, other: &Self) -> bool {
+        self.axis == other.axis && (self.start == other.start && self.end == other.end || self.start == other.end && self.end == other.start)
+    }
+}
+
+impl Hash for Edge {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        let is_start_smaller = self.start.x < self.end.x || (self.start.x == self.end.x && self.start.y < self.end.y);
+        let (a, b) = if is_start_smaller {
+            (self.start, self.end)
+        } else {
+            (self.end, self.start)
+        };
+        a.hash(state);
+        b.hash(state);
+        self.axis.hash(state)
+    }
+}
+
+
+fn calc_edges(points: &HashMap<UVec2, HashSet<Direction>>) -> Vec<Edge> {
+    let points = points
+        .iter()
+        .map(|(pos, directions)| (pos.as_ivec2(), directions))
+        .collect::<HashMap<_, _>>();
+    let mut edges = vec![];
+    for (pos, connections) in points {
+        for direction in DIRECTIONS.iter() {
+            if connections.contains(direction) {
+                let next_pos = direction.next_ivec2(pos);
+                edges.push(Edge {
+                    start: pos,
+                    end: next_pos,
+                    axis: Axis::from(*direction),
+                });
+            }
+        }
+    }
+    edges
+}
+
+fn calculate_sides(edges: Vec<Edge>) -> usize {
+    let mut visited = HashSet::new();
+    let mut sides = 0;
+
+    for edge in &edges {
+        if visited.contains(edge) {
+            continue;
+        }
+
+        // Start flood-fill for continuous edges
+        let mut queue = VecDeque::new();
+        queue.push_back(*edge);
+        visited.insert(*edge);
+
+        while let Some(current) = queue.pop_front() {
+            for neighbor in find_contiguous_edges(&current, &edges) {
+                if !visited.contains(&neighbor) {
+                    visited.insert(neighbor);
+                    queue.push_back(neighbor);
+                }
+            }
+        }
+
+        // Count a side after processing a contiguous group
+        sides += 1;
+    }
+
+    sides
+}
+
+fn find_contiguous_edges(edge: &Edge, edges: &[Edge]) -> Vec<Edge> {
+    edges
+        .iter()
+        .filter(|&e| {
+            // Check if the edges are connected and on same axis
+            e.axis == edge.axis && are_edges_connected(edge, e)
+        })
+        .copied()
+        .collect()
+}
+
+fn are_edges_connected(e1: &Edge, e2: &Edge) -> bool {
+    e1.end == e2.start || e1.start == e2.end || e1.start == e2.start || e1.end == e2.end
 }
 
 fn calc_perimeter_areas(garden: &Vec<Vec<char>>) -> Vec<GardenBed> {
@@ -156,24 +281,13 @@ fn calc_perimeter_areas(garden: &Vec<Vec<char>>) -> Vec<GardenBed> {
                 if seen.contains(&next_pos) {
                     continue 'direction;
                 }
-                search_queue.push_front(next_pos);
+                search_queue.push_back(next_pos);
             }
         }
-
-        let boundry_points = boundry_points(points).into_iter().map(IntoIVec2::into_ivec2).sorted().collect::<Vec<_>>();
-        for boundry_point in boundry_points.iter() {
-            let mut has_connections = false;
-            for (direction, next_pos) in Direction::all().filter_map(|direction| {
-                let next_pos = direction.next_ivec2(boundry_point);
-                if !boundry_points.contains(&next_pos) {
-                    None
-                } else {
-                    Some((direction, next_pos))
-                }
-            }) {
-                has_connections = true
-            }
-        }
+        let boundry_points = boundry_points(points);
+        let edges = calc_edges(&boundry_points);
+        let sides = calculate_sides(edges);
+        pa.sides = sides;
         results.push(GardenBed {
             label: cur_char,
             perimeter_area: pa,
@@ -190,13 +304,148 @@ mod tests {
     use itertools::Itertools;
 
     #[test]
+    fn test_boundry_points() {
+        let mut points = HashMap::new();
+        points.insert(
+            UVec2 { x: 0, y: 0 },
+            HashSet::from([Direction::Right, Direction::Down]),
+        );
+        points.insert(
+            UVec2 { x: 1, y: 0 },
+            HashSet::from([Direction::Left, Direction::Down]),
+        );
+        points.insert(
+            UVec2 { x: 0, y: 1 },
+            HashSet::from([Direction::Right, Direction::Up]),
+        );
+        points.insert(
+            UVec2 { x: 1, y: 1 },
+            HashSet::from([Direction::Left, Direction::Up]),
+        );
+
+        let boundary = boundry_points(points);
+
+        // Check that boundary points only include edges, not fully surrounded points.
+        assert_eq!(boundary.len(), 4);
+        assert!(boundary.contains_key(&UVec2 { x: 0, y: 0 }));
+        assert!(boundary.contains_key(&UVec2 { x: 1, y: 0 }));
+        assert!(boundary.contains_key(&UVec2 { x: 0, y: 1 }));
+        assert!(boundary.contains_key(&UVec2 { x: 1, y: 1 }));
+    }
+
+    #[test]
+    fn test_calc_edges() {
+        let mut points = HashMap::new();
+        points.insert(
+            UVec2 { x: 0, y: 0 },
+            HashSet::from([Direction::Right, Direction::Down]),
+        );
+        points.insert(
+            UVec2 { x: 1, y: 0 },
+            HashSet::from([Direction::Left, Direction::Down]),
+        );
+
+        let edges = calc_edges(&points);
+
+        // Check that edges are generated correctly.
+        assert_eq!(edges.len(), 4);
+        assert!(edges.contains(&Edge {
+            start: IVec2 { x: 0, y: 0 },
+            end: IVec2 { x: 1, y: 0 },
+            axis: Axis::X,
+        }));
+        assert!(edges.contains(&Edge {
+            start: IVec2 { x: 0, y: 0 },
+            end: IVec2 { x: 0, y: 1 },
+            axis: Axis::Y,
+        }));
+    }
+
+    #[test]
+    fn test_calculate_sides() {
+        let edges = vec![
+            Edge {
+                start: IVec2 { x: 0, y: 0 },
+                end: IVec2 { x: 1, y: 0 },
+                axis: Axis::X,
+            },
+            Edge {
+                start: IVec2 { x: 1, y: 0 },
+                end: IVec2 { x: 2, y: 0 },
+                axis: Axis::X,
+            },
+            Edge {
+                start: IVec2 { x: 0, y: 0 },
+                end: IVec2 { x: 0, y: 1 },
+                axis: Axis::X,
+            },
+            Edge {
+                start: IVec2 { x: 0, y: 1 },
+                end: IVec2 { x: 0, y: 2 },
+                axis: Axis::X,
+            },
+            Edge {
+                start: IVec2 { x: 0, y: 2 },
+                end: IVec2 { x: 0, y: 3 },
+                axis: Axis::Y,
+            },
+        ];
+
+        let sides = calculate_sides(edges);
+
+        // Check that contiguous edges are grouped into sides.
+        assert_eq!(sides, 2);
+    }
+
+    #[test]
+    fn test_find_neighbors() {
+        let edges = vec![
+            Edge {
+                start: IVec2 { x: 0, y: 0 },
+                end: IVec2 { x: 1, y: 0 },
+                axis: Axis::X,
+            },
+            Edge {
+                start: IVec2 { x: 1, y: 0 },
+                end: IVec2 { x: 2, y: 0 },
+                axis: Axis::X,
+            },
+            Edge {
+                start: IVec2 { x: 0, y: 0 },
+                end: IVec2 { x: 0, y: 1 },
+                axis: Axis::Y,
+            },
+        ];
+
+        let neighbors = find_contiguous_edges(
+            &Edge {
+                start: IVec2 { x: 0, y: 0 },
+                end: IVec2 { x: 1, y: 0 },
+                axis: Axis::X,
+            },
+            &edges,
+        );
+
+        // Check that neighbors include the correct contiguous edges.
+        assert_eq!(neighbors.len(), 2);
+        assert!(neighbors.contains(&Edge {
+            start: IVec2 { x: 1, y: 0 },
+            end: IVec2 { x: 2, y: 0 },
+            axis: Axis::X,
+        }));
+    }
+
+
+
+    #[test]
     fn calc_perimeter_areas_test() {
         let matrix = deformat_string(
             "
                 AA
                 AA
             ",
-        ).to_chars_matrix();
+        )
+        .to_chars_matrix();
         let pas = calc_perimeter_areas(&matrix);
         assert_eq!(
             pas,
@@ -204,6 +453,7 @@ mod tests {
                 label: 'A',
                 perimeter_area: PerimeterArea {
                     area: 4,
+                    sides: 4,
                     perimeter: 8
                 },
             },],
@@ -224,6 +474,7 @@ mod tests {
                     label: 'A',
                     perimeter_area: PerimeterArea {
                         area: 3,
+                        sides: 6,
                         perimeter: 8
                     },
                 },
@@ -231,6 +482,7 @@ mod tests {
                     label: 'B',
                     perimeter_area: PerimeterArea {
                         area: 1,
+                        sides: 4,
                         perimeter: 4
                     },
                 },
@@ -263,6 +515,7 @@ mod tests {
                 label: 'R',
                 perimeter_area: PerimeterArea {
                     area: 12,
+                    sides: 10,
                     perimeter: 18,
                 },
             },
@@ -270,6 +523,7 @@ mod tests {
                 label: 'I',
                 perimeter_area: PerimeterArea {
                     area: 4,
+                    sides: 4,
                     perimeter: 8,
                 },
             },
@@ -277,6 +531,7 @@ mod tests {
                 label: 'C',
                 perimeter_area: PerimeterArea {
                     area: 14,
+                    sides: 22,
                     perimeter: 28,
                 },
             },
@@ -284,6 +539,7 @@ mod tests {
                 label: 'F',
                 perimeter_area: PerimeterArea {
                     area: 10,
+                    sides: 12,
                     perimeter: 18,
                 },
             },
@@ -291,6 +547,7 @@ mod tests {
                 label: 'V',
                 perimeter_area: PerimeterArea {
                     area: 13,
+                    sides: 10,
                     perimeter: 20,
                 },
             },
@@ -298,6 +555,7 @@ mod tests {
                 label: 'J',
                 perimeter_area: PerimeterArea {
                     area: 11,
+                    sides: 12,
                     perimeter: 20,
                 },
             },
@@ -305,6 +563,7 @@ mod tests {
                 label: 'C',
                 perimeter_area: PerimeterArea {
                     area: 1,
+                    sides: 4,
                     perimeter: 4,
                 },
             },
@@ -312,6 +571,7 @@ mod tests {
                 label: 'E',
                 perimeter_area: PerimeterArea {
                     area: 13,
+                    sides: 8,
                     perimeter: 18,
                 },
             },
@@ -319,6 +579,7 @@ mod tests {
                 label: 'I',
                 perimeter_area: PerimeterArea {
                     area: 14,
+                    sides: 16,
                     perimeter: 22,
                 },
             },
@@ -326,6 +587,7 @@ mod tests {
                 label: 'M',
                 perimeter_area: PerimeterArea {
                     area: 5,
+                    sides: 6,
                     perimeter: 12,
                 },
             },
@@ -333,6 +595,7 @@ mod tests {
                 label: 'S',
                 perimeter_area: PerimeterArea {
                     area: 3,
+                    sides: 6,
                     perimeter: 8,
                 },
             },
@@ -340,9 +603,13 @@ mod tests {
         .into_iter()
         .sorted()
         .collect::<Vec<_>>();
+        assert_eq!(perimeter_areas, expected,);
         assert_eq!(
-            perimeter_areas,
-            expected,
+            perimeter_areas
+                .iter()
+                .map(|pa| pa.perimeter_area.cost())
+                .sum::<usize>(),
+            1206,
         );
         Ok(())
     }

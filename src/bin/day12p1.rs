@@ -318,6 +318,10 @@ mod tests {
             perimeter_areas,
             expected,
         );
+        assert_eq!(
+            perimeter_areas.iter().map(|pa| pa.perimeter_area.cost()).sum::<usize>(),
+            1930,
+        );
         Ok(())
     }
 }
