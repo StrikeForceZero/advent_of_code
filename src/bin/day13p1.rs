@@ -99,7 +99,7 @@ impl Instance {
         self.a_times * self.section.button_a + self.b_times * self.section.button_b
     }
     fn token_cost(&self) -> u32 {
-        self.a_times * 1 + self.b_times * 3
+        self.a_times * 3 + self.b_times * 1
     }
     fn too_many_a_presses(&self) -> bool {
         self.a_times >= 100
@@ -164,6 +164,7 @@ mod tests {
             Button B: X+27, Y+71
             Prize: X=18641, Y=10279
         ");
+        let mut total_tokens = 0;
         let mut lines = input.lines();
         let section = parse_section(&mut lines)?;
         assert_eq!(
@@ -174,6 +175,9 @@ mod tests {
                 b_times: 40,
             }
         );
+        if let Ok(instance) = section.solve() {
+            total_tokens += instance.token_cost();
+        }
         let section = parse_section(&mut lines)?;
         assert!(section.solve().is_err());
         let section = parse_section(&mut lines)?;
@@ -185,8 +189,12 @@ mod tests {
                 b_times: 86,
             }
         );
+        if let Ok(instance) = section.solve() {
+            total_tokens += instance.token_cost();
+        }
         let section = parse_section(&mut lines)?;
         assert!(section.solve().is_err());
+        assert_eq!(total_tokens, 480);
         Ok(())
     }
 }
